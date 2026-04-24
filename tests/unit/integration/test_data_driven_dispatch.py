@@ -497,6 +497,36 @@ class TestCodexPartitionRouting:
         assert ".codex/hooks/pkg/script.sh" in buckets["hooks"]
 
 
+class TestKiroPartitionRouting:
+    """Verify that Kiro deployed files are routed to the correct buckets."""
+
+    def test_partition_routes_kiro_hooks_correctly(self):
+        managed = {
+            ".kiro/hooks/hookify-hooks-agentStop.kiro.hook",
+            ".kiro/hooks/hookify-hooks-preToolUse.kiro.hook",
+            ".kiro/hooks/hookify/hooks/stop.py",
+        }
+        buckets = BaseIntegrator.partition_managed_files(managed)
+        assert ".kiro/hooks/hookify-hooks-agentStop.kiro.hook" in buckets["hooks"]
+        assert ".kiro/hooks/hookify-hooks-preToolUse.kiro.hook" in buckets["hooks"]
+        assert ".kiro/hooks/hookify/hooks/stop.py" in buckets["hooks"]
+
+    def test_partition_routes_kiro_agents_correctly(self):
+        managed = {
+            ".kiro/agents/my-agent.json",
+            ".kiro/steering/python.md",
+        }
+        buckets = BaseIntegrator.partition_managed_files(managed)
+        assert ".kiro/agents/my-agent.json" in buckets["agents_kiro"]
+        assert ".kiro/steering/python.md" in buckets["instructions_kiro"]
+
+    def test_kiro_hook_extension_routes_to_hooks_not_agents(self):
+        managed = {".kiro/hooks/pkg-hooks-agentStop.kiro.hook"}
+        buckets = BaseIntegrator.partition_managed_files(managed)
+        assert ".kiro/hooks/pkg-hooks-agentStop.kiro.hook" in buckets["hooks"]
+        assert ".kiro/hooks/pkg-hooks-agentStop.kiro.hook" not in buckets.get("agents_kiro", set())
+
+
 class TestClaudeRulesPartitionRouting:
     """Verify that Claude rules deployed_files are routed to the correct bucket."""
 

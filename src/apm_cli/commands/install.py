@@ -915,7 +915,7 @@ def _run_mcp_install(
     help="Install APM and MCP dependencies (auto-creates apm.yml; use --allow-insecure for http:// packages)"
 )
 @click.argument("packages", nargs=-1)
-@click.option("--runtime", help="Target specific runtime only (copilot, codex, vscode)")
+@click.option("--runtime", help="Target specific runtime only (copilot, codex, kiro, vscode)")
 @click.option("--exclude", help="Exclude specific runtime from installation")
 @click.option(
     "--only",
@@ -954,7 +954,7 @@ def _run_mcp_install(
     "target",
     type=TargetParamType(),
     default=None,
-    help="Target platform (comma-separated for multiple, e.g. claude,copilot). Use 'all' for every target. Overrides auto-detection.",
+    help="Target platform (comma-separated for multiple, e.g. claude,copilot,kiro). Use 'all' for every target. Overrides auto-detection.",
 )
 @click.option(
     "--allow-insecure",
@@ -975,7 +975,7 @@ def _run_mcp_install(
     "--global", "-g", "global_",
     is_flag=True,
     default=False,
-    help="Install to user scope (~/.apm/) instead of the current project. MCP servers target global-capable runtimes only (Copilot CLI, Codex CLI).",
+    help="Install to user scope (~/.apm/) instead of the current project. MCP servers target global-capable runtimes only (Copilot CLI, Codex CLI, Kiro).",
 )
 @click.option(
     "--ssh",

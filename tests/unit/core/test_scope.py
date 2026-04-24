@@ -227,6 +227,29 @@ class TestTargetProfileUserScope:
         assert KNOWN_TARGETS["opencode"].supports_at_user_scope("commands") is True
         assert KNOWN_TARGETS["opencode"].supports_at_user_scope("hooks") is False
 
+    def test_kiro_is_fully_supported_at_user_scope(self):
+        assert KNOWN_TARGETS["kiro"].user_supported is True
+
+    def test_kiro_user_root_dir(self):
+        assert KNOWN_TARGETS["kiro"].user_root_dir == ".kiro"
+
+    def test_kiro_effective_root_same_at_both_scopes(self):
+        assert KNOWN_TARGETS["kiro"].effective_root(user_scope=False) == ".kiro"
+        assert KNOWN_TARGETS["kiro"].effective_root(user_scope=True) == ".kiro"
+
+    def test_kiro_supports_all_primitives_at_user_scope(self):
+        kiro = KNOWN_TARGETS["kiro"]
+        for prim in ("instructions", "agents", "skills", "hooks"):
+            assert kiro.supports_at_user_scope(prim) is True, (
+                f"Kiro should support '{prim}' at user scope"
+            )
+
+    def test_kiro_for_scope_user_returns_unchanged_profile(self):
+        scoped = KNOWN_TARGETS["kiro"].for_scope(user_scope=True)
+        assert scoped is not None
+        assert scoped.root_dir == ".kiro"
+        assert set(scoped.primitives.keys()) == {"instructions", "agents", "skills", "hooks"}
+
     def test_unsupported_targets_have_no_user_root(self):
         for name, profile in KNOWN_TARGETS.items():
             if profile.user_supported is False:
