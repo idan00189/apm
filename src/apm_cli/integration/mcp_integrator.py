@@ -600,13 +600,18 @@ class MCPIntegrator:
                         exc_info=True,
                     )
 
-        # Clean .kiro/settings/mcp.json (only if .kiro/ directory exists)
+        # Clean .kiro/settings/mcp.json — both project scope (CWD) and user scope (~/)
         if "kiro" in target_runtimes:
-            kiro_mcp = Path.cwd() / ".kiro" / "settings" / "mcp.json"
-            if kiro_mcp.exists():
-                try:
-                    import json as _json
+            import json as _json
 
+            _kiro_paths = [
+                Path.cwd() / ".kiro" / "settings" / "mcp.json",
+                Path.home() / ".kiro" / "settings" / "mcp.json",
+            ]
+            for kiro_mcp in _kiro_paths:
+                if not kiro_mcp.exists():
+                    continue
+                try:
                     config = _json.loads(kiro_mcp.read_text(encoding="utf-8"))
                     servers = config.get("mcpServers", {})
                     removed = [n for n in expanded_stale if n in servers]
@@ -619,15 +624,15 @@ class MCPIntegrator:
                         for name in removed:
                             if logger:
                                 logger.progress(
-                                    f"Removed stale MCP server '{name}' from .kiro/settings/mcp.json"
+                                    f"Removed stale MCP server '{name}' from {kiro_mcp}"
                                 )
                             else:
                                 _rich_info(
-                                    f"+ Removed stale MCP server '{name}' from .kiro/settings/mcp.json"
+                                    f"+ Removed stale MCP server '{name}' from {kiro_mcp}"
                                 )
                 except Exception:
                     _log.debug(
-                        "Failed to clean stale MCP servers from .kiro/settings/mcp.json",
+                        "Failed to clean stale MCP servers from %s", kiro_mcp,
                         exc_info=True,
                     )
 
@@ -769,6 +774,7 @@ class MCPIntegrator:
         server_info_cache: dict = None,
         shared_runtime_vars: dict = None,
         logger=None,
+        user_scope: bool = False,
     ) -> bool:
         """Install MCP dependencies for a specific runtime.
 
@@ -794,6 +800,7 @@ class MCPIntegrator:
                         shared_env_vars=shared_env_vars,
                         server_info_cache=server_info_cache,
                         shared_runtime_vars=shared_runtime_vars,
+                        user_scope=user_scope,
                     )
                     if result["failed"]:
                         if logger:
@@ -1123,6 +1130,8 @@ class MCPIntegrator:
         # Applied after both explicit --runtime and auto-discovery paths.
         from apm_cli.core.scope import InstallScope
 
+        _is_user_scope: bool = scope is InstallScope.USER
+
         if scope is InstallScope.USER:
             from apm_cli.factory import ClientFactory as _CF
 
@@ -1332,6 +1341,7 @@ class MCPIntegrator:
                                     server_info_cache,
                                     shared_runtime_vars,
                                     logger=logger,
+                                    user_scope=_is_user_scope,
                                 ):
                                     any_ok = True
 
@@ -1454,6 +1464,7 @@ class MCPIntegrator:
                         self_defined_env,
                         self_defined_cache,
                         logger=logger,
+                        user_scope=_is_user_scope,
                     ):
                         any_ok = True
 

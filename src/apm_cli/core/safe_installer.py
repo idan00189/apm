@@ -70,26 +70,27 @@ class SafeMCPInstaller:
         self.conflict_detector = MCPConflictDetector(self.adapter)
         self.logger = logger
     
-    def install_servers(self, server_references: List[str], env_overrides: Dict[str, str] = None, server_info_cache: Dict[str, Any] = None, runtime_vars: Dict[str, str] = None) -> InstallationSummary:
+    def install_servers(self, server_references: List[str], env_overrides: Dict[str, str] = None, server_info_cache: Dict[str, Any] = None, runtime_vars: Dict[str, str] = None, user_scope: bool = False) -> InstallationSummary:
         """Install MCP servers with conflict detection.
-        
+
         Args:
             server_references: List of server references to install.
             env_overrides: Optional dictionary of environment variable overrides.
             server_info_cache: Optional pre-fetched server info to avoid duplicate registry calls.
             runtime_vars: Optional dictionary of runtime variable values.
-            
+            user_scope: When True, write to user-scope config (e.g. ~/.kiro/settings/mcp.json).
+
         Returns:
             InstallationSummary with detailed results.
         """
         summary = InstallationSummary()
-        
+
         for server_ref in server_references:
             if self.conflict_detector.check_server_exists(server_ref):
                 summary.add_skipped(server_ref, "already configured")
                 self._log_skip(server_ref)
                 continue
-            
+
             try:
                 # Pass environment overrides, server info cache, and runtime variables if provided
                 kwargs = {}
@@ -99,7 +100,9 @@ class SafeMCPInstaller:
                     kwargs['server_info_cache'] = server_info_cache
                 if runtime_vars is not None:
                     kwargs['runtime_vars'] = runtime_vars
-                
+                if user_scope:
+                    kwargs['user_scope'] = True
+
                 result = self.adapter.configure_mcp_server(server_ref, **kwargs)
                     
                 if result:

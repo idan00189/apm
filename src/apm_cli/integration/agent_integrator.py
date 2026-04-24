@@ -292,7 +292,9 @@ class AgentIntegrator(BaseIntegrator):
             try:
                 import yaml
 
-                fm = yaml.safe_load(fm_match.group(1)) or {}
+                fm = yaml.safe_load(fm_match.group(1))
+                if not isinstance(fm, dict):
+                    fm = {}
                 name = fm.get("name", name)
                 description = fm.get("description", description)
                 model = fm.get("model", model)

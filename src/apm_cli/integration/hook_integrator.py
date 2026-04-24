@@ -674,10 +674,13 @@ class HookIntegrator(BaseIntegrator):
         (``bash``, ``powershell``, etc.) are ignored since Kiro's
         ``.kiro.hook`` format uses a single ``command`` field.
         """
-        if "hooks" in entry:
+        nested = entry.get("hooks")
+        if nested is not None:
+            if not isinstance(nested, list):
+                return []
             return [
                 inner["command"]
-                for inner in entry["hooks"]
+                for inner in nested
                 if isinstance(inner, dict) and "command" in inner
             ]
         if "command" in entry:

@@ -90,15 +90,22 @@ class KiroClientAdapter(CopilotClientAdapter):
         env_overrides=None,
         server_info_cache=None,
         runtime_vars=None,
+        user_scope: bool = False,
     ):
-        """Configure an MCP server in ``.kiro/settings/mcp.json``."""
+        """Configure an MCP server in ``.kiro/settings/mcp.json``.
+
+        At project scope, the ``.kiro/`` directory must already exist (opt-in).
+        At user scope (``user_scope=True``), ``~/.kiro/settings/`` is
+        created automatically.
+        """
         if not server_url:
             print("Error: server_url cannot be empty")
             return False
 
-        kiro_dir = Path(os.getcwd()) / ".kiro"
-        if not kiro_dir.exists():
-            return True  # nothing to do, not an error
+        if not user_scope:
+            kiro_dir = Path(os.getcwd()) / ".kiro"
+            if not kiro_dir.exists():
+                return True  # nothing to do at project scope, not an error
 
         try:
             if server_info_cache and server_url in server_info_cache:
@@ -120,7 +127,7 @@ class KiroClientAdapter(CopilotClientAdapter):
             server_config = self._format_server_config(
                 server_info, env_overrides, runtime_vars
             )
-            self.update_config({config_key: server_config})
+            self.update_config({config_key: server_config}, user_scope=user_scope)
 
             print(f"Successfully configured MCP server '{config_key}' for Kiro")
             return True
