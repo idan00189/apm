@@ -2,7 +2,8 @@
 
 Integrates hook JSON files and their referenced scripts during package
 installation. Supports VSCode Copilot (.github/hooks/), Claude Code
-(.claude/settings.json), and Cursor (.cursor/hooks.json) targets.
+(.claude/settings.json), Cursor (.cursor/hooks.json), and Kiro
+(.kiro/hooks/*.kiro.hook) targets.
 
 Hook JSON format (Claude Code  -- nested matcher groups):
     {
@@ -109,9 +110,10 @@ class HookIntegrator(BaseIntegrator):
 
     Discovers hook JSON files and their referenced scripts from packages,
     then installs them to the appropriate target location:
-    - VSCode: .github/hooks/<pkg>-<name>.json + .github/hooks/scripts/<pkg>/
+    - VSCode/Copilot: .github/hooks/<pkg>-<name>.json + .github/hooks/scripts/<pkg>/
     - Claude: Merged into .claude/settings.json hooks key + .claude/hooks/<pkg>/
     - Cursor: Merged into .cursor/hooks.json hooks key + .cursor/hooks/<pkg>/
+    - Kiro: .kiro/hooks/<pkg>-<stem>-<event>.kiro.hook (one file per event/command)
     """
 
     # Superset of all known script-path keys across supported hook specs.
@@ -643,6 +645,154 @@ class HookIntegrator(BaseIntegrator):
         )
 
     # ------------------------------------------------------------------
+    # Kiro IDE hooks (.kiro.hook format)
+    # ------------------------------------------------------------------
+
+    # Maps Claude Code / APM event names → Kiro IDE when.type values.
+    # Kiro uses camelCase; "Stop" becomes "agentStop"; "UserPromptSubmit"
+    # becomes "promptSubmit".  Unknown names are lowercased as a fallback.
+    _KIRO_EVENT_MAP: Dict[str, str] = {
+        "PreToolUse": "preToolUse",
+        "PostToolUse": "postToolUse",
+        "Stop": "agentStop",
+        "UserPromptSubmit": "promptSubmit",
+        "SessionStart": "agentSpawn",
+        # pass-through for already-correct Kiro names
+        "preToolUse": "preToolUse",
+        "postToolUse": "postToolUse",
+        "agentStop": "agentStop",
+        "promptSubmit": "promptSubmit",
+        "agentSpawn": "agentSpawn",
+    }
+
+    def _extract_hook_commands(self, entry: dict) -> List[str]:
+        """Extract command strings from a single hooks-array entry.
+
+        Handles both the flat format ``{"type": "command", "command": "..."}``
+        and the nested format ``{"matcher": "...", "hooks": [...]}``.
+        Only the ``command`` key is extracted; other OS-specific keys
+        (``bash``, ``powershell``, etc.) are ignored since Kiro's
+        ``.kiro.hook`` format uses a single ``command`` field.
+        """
+        if "hooks" in entry:
+            return [
+                inner["command"]
+                for inner in entry["hooks"]
+                if isinstance(inner, dict) and "command" in inner
+            ]
+        if "command" in entry:
+            return [entry["command"]]
+        return []
+
+    def _integrate_kiro_hooks(
+        self,
+        target,
+        package_info,
+        project_root: Path,
+        *,
+        force: bool = False,
+        managed_files: set = None,
+        diagnostics=None,
+    ) -> "HookIntegrationResult":
+        """Integrate hooks as ``.kiro.hook`` files for the Kiro IDE.
+
+        Each command in each event type of each source hook JSON is written
+        as a separate ``{pkg}-{stem}-{kiroEvent}.kiro.hook`` file using
+        Kiro's ``{"version", "enabled", "when", "then"}`` schema.
+
+        Event name mapping from Claude Code → Kiro IDE:
+            PreToolUse      → preToolUse
+            PostToolUse     → postToolUse
+            Stop            → agentStop
+            UserPromptSubmit → promptSubmit
+            SessionStart    → agentSpawn
+        """
+        _empty = HookIntegrationResult(
+            files_integrated=0, files_updated=0, files_skipped=0, target_paths=[],
+        )
+
+        root_dir = target.root_dir
+        if not (project_root / root_dir).is_dir():
+            return _empty
+
+        hook_files = self.find_hook_files(package_info.install_path)
+        if not hook_files:
+            return _empty
+
+        hooks_dir = project_root / root_dir / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        package_name = self._get_package_name(package_info)
+        hooks_integrated = 0
+        scripts_copied = 0
+        target_paths: List[Path] = []
+
+        for hook_file in hook_files:
+            data = self._parse_hook_json(hook_file)
+            if data is None:
+                continue
+
+            rewritten, scripts = self._rewrite_hooks_data(
+                data, package_info.install_path, package_name, "kiro",
+                hook_file_dir=hook_file.parent,
+                root_dir=root_dir,
+            )
+
+            stem = hook_file.stem  # e.g. "hooks", "security"
+            hooks_data = rewritten.get("hooks", {})
+
+            for event_name, entries in hooks_data.items():
+                kiro_event = self._KIRO_EVENT_MAP.get(event_name, event_name)
+
+                all_commands: List[str] = []
+                for entry in entries:
+                    all_commands.extend(self._extract_hook_commands(entry))
+
+                for idx, command in enumerate(all_commands):
+                    suffix = f"-{idx}" if len(all_commands) > 1 else ""
+                    filename = f"{package_name}-{stem}-{kiro_event}{suffix}.kiro.hook"
+                    target_path = hooks_dir / filename
+                    rel_path = portable_relpath(target_path, project_root)
+
+                    if self.check_collision(
+                        target_path, rel_path, managed_files, force,
+                        diagnostics=diagnostics,
+                    ):
+                        continue
+
+                    kiro_hook = {
+                        "version": "1.0.0",
+                        "enabled": True,
+                        "name": f"{package_name}-{kiro_event}",
+                        "when": {"type": kiro_event},
+                        "then": {"type": "runCommand", "command": command},
+                    }
+                    target_path.write_text(
+                        json.dumps(kiro_hook, indent=2) + "\n", encoding="utf-8"
+                    )
+                    hooks_integrated += 1
+                    target_paths.append(target_path)
+
+            # Copy referenced scripts (paths already rewritten for .kiro layout)
+            for source_file, target_rel in scripts:
+                target_script = project_root / target_rel
+                if self.check_collision(
+                    target_script, target_rel, managed_files, force,
+                    diagnostics=diagnostics,
+                ):
+                    continue
+                target_script.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_file, target_script)
+                scripts_copied += 1
+                target_paths.append(target_script)
+
+        return HookIntegrationResult(
+            files_integrated=hooks_integrated, files_updated=0,
+            files_skipped=0, target_paths=target_paths,
+            scripts_copied=scripts_copied,
+        )
+
+    # ------------------------------------------------------------------
     # Target-driven API
     # ------------------------------------------------------------------
 
@@ -658,11 +808,19 @@ class HookIntegrator(BaseIntegrator):
     ) -> "HookIntegrationResult":
         """Integrate hooks for a single *target*.
 
-        Copilot uses individual JSON files (genuinely different pattern).
-        All other merge-based targets are dispatched via the
-        ``_MERGE_HOOK_TARGETS`` registry.
+        Dispatch table:
+        - Kiro     → ``_integrate_kiro_hooks`` (.kiro.hook schema, event name mapping)
+        - Copilot  → ``integrate_package_hooks`` (individual JSON files, VSCode layout)
+        - Others   → ``_integrate_merged_hooks`` (merged JSON config via _MERGE_HOOK_TARGETS)
         """
-        if target.name in ("copilot", "kiro"):
+        if target.name == "kiro":
+            return self._integrate_kiro_hooks(
+                target, package_info, project_root,
+                force=force, managed_files=managed_files,
+                diagnostics=diagnostics,
+            )
+
+        if target.name == "copilot":
             return self.integrate_package_hooks(
                 package_info, project_root,
                 force=force, managed_files=managed_files,

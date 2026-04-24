@@ -279,7 +279,7 @@ KNOWN_TARGETS: Dict[str, TargetProfile] = {
                 "skills", "/SKILL.md", "skill_standard"
             ),
             "hooks": PrimitiveMapping(
-                "hooks", ".json", "kiro_hooks"
+                "hooks", ".kiro.hook", "kiro_hooks"
             ),
         },
         auto_create=False,

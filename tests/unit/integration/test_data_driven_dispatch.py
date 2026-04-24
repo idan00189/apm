@@ -277,11 +277,13 @@ class TestExhaustivenessChecks:
             "agents_cursor",
             "agents_opencode",
             "agents_codex",
+            "agents_kiro",
             "commands",            # was commands_claude, aliased
             "commands_opencode",
             "instructions",        # was instructions_copilot, aliased
             "rules_cursor",        # was instructions_cursor, aliased
             "rules_claude",        # was instructions_claude, aliased
+            "instructions_kiro",
             "skills",              # cross-target bucket
             "hooks",               # cross-target bucket
         }
