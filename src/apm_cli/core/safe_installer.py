@@ -92,7 +92,6 @@ class SafeMCPInstaller:
                 continue
 
             try:
-                # Pass environment overrides, server info cache, and runtime variables if provided
                 kwargs = {}
                 if env_overrides is not None:
                     kwargs['env_overrides'] = env_overrides

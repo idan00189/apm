@@ -103,7 +103,7 @@ class KiroClientAdapter(CopilotClientAdapter):
             return False
 
         if not user_scope:
-            kiro_dir = Path(os.getcwd()) / ".kiro"
+            kiro_dir = Path(self.get_config_path()).parent.parent
             if not kiro_dir.exists():
                 return True  # nothing to do at project scope, not an error
 
